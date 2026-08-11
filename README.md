@@ -24,19 +24,16 @@ Install: about 5 minutes, full walkthrough in [docs/INSTALL.md](docs/INSTALL.md)
 
 ## What you get
 
-**Measurement** — a hook records metadata for every tool call (which tool, how
-many bytes came back, which subagent). A report script turns weeks of that into
-a before/after number.
-
-**Reduction** — a cheap-model search agent keeps file contents out of your main
-context. A `/context` command tells you what to drop mid-session. A `CLAUDE.md`
-template stops Claude guessing at your build commands.
-
-**A guardrail** — an optional hook blocks reads, writes, greps, and shell
-access to `.env`, `*.pem`, credentials, and similar.
-
-**No source code, no prompts, and no file contents are ever logged.** Nothing
-leaves your machine. See [Privacy](#privacy).
+- **Measurement** — a hook logs metadata for every tool call (which tool, how
+  many bytes came back, which subagent). A report script turns weeks of that
+  into a before/after number.
+- **Reduction** — a cheap-model search agent keeps file contents out of your
+  main context, a `/context` command tells you what to drop mid-session, and
+  a `CLAUDE.md` template stops Claude guessing at your build commands.
+- **A guardrail** — an optional hook blocks reads, writes, greps, and shell
+  access to `.env`, `*.pem`, credentials, and similar.
+- **Nothing leaves your machine** — no source code, prompts, or file contents
+  are ever logged. See [Privacy](#privacy).
 
 ---
 
@@ -159,7 +156,8 @@ line.
 
 ---
 
-## What's in the box
+<details>
+<summary><h2 style="display:inline">What's in the box</h2></summary>
 
 ```
 .claude/
@@ -184,9 +182,10 @@ docs/
   ROLLOUT.md               Four-week team plan
 ```
 
----
+</details>
 
-## Rolling out to a team
+<details>
+<summary><h2 style="display:inline">Rolling out to a team</h2></summary>
 
 [docs/ROLLOUT.md](docs/ROLLOUT.md) has a four-week plan with decision points.
 The short version:
@@ -201,9 +200,10 @@ The short version:
 Open it as a PR rather than pushing to main. Someone should review code that's
 going to run on everyone's machine, and the merge is your record of adoption.
 
----
+</details>
 
-## Status
+<details>
+<summary><h2 style="display:inline">Status</h2></summary>
 
 Hook scripts and `report.py` are tested against representative payloads: normal
 tool calls, subagent calls, nested-object responses, missing fields, and
@@ -212,3 +212,5 @@ silent by design, so a broken measurement tool never blocks your work.
 
 Verified end to end on Windows with Git Bash, including a fresh-clone install.
 Not yet exercised at team scale — issues and corrections welcome.
+
+</details>
