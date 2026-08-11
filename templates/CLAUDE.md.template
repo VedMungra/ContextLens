@@ -1,0 +1,103 @@
+# <REPO NAME>
+
+<!--
+  This file loads into context at the start of every Claude Code session in
+  this repo. Two consequences follow:
+
+  1. Every line costs tokens on every session. Keep it under ~150 lines.
+  2. It sits in the cached prefix. Editing it frequently invalidates prompt
+     caching for everyone. Batch your changes; do not tinker daily.
+
+  Include only things Claude would otherwise get WRONG. Generic advice
+  ("write clean code", "handle errors") is pure cost with no benefit --
+  the model already does that.
+
+  Delete every section below that does not apply. An honest short file beats
+  a padded long one.
+-->
+
+## What this service does
+
+<!-- Two or three sentences. What it owns, who calls it, what it calls. -->
+
+## Architecture
+
+<!-- Ten lines maximum. What talks to what. Name the entry points. -->
+
+```
+<e.g.>
+api/          FastAPI handlers, thin -- no business logic here
+core/         domain logic, no framework imports
+adapters/     database, queue, and third-party clients
+workers/      Celery tasks
+```
+
+## Commands
+
+<!-- Exact commands. This section alone stops a lot of wasted guessing. -->
+
+```bash
+# install
+<command>
+
+# run locally
+<command>
+
+# tests -- full suite
+<command>
+
+# tests -- single file
+<command>
+
+# lint / format / typecheck
+<command>
+
+# migrations
+<command>
+```
+
+## Conventions that are not obvious from the code
+
+<!--
+  The highest-value section. Things a competent engineer would get wrong on
+  their first week here.
+
+  Examples of the right shape:
+  - Errors: raise domain exceptions from core/, translate to HTTP only in api/
+  - New endpoints go in api/v2/. api/v1/ is frozen.
+  - All timestamps are UTC and stored as timezone-aware datetimes.
+  - Use the repository pattern in adapters/; no ORM queries in core/.
+  - Tests use factories from tests/factories.py, never fixtures.
+-->
+
+## Traps
+
+<!--
+  Things that will break if touched carelessly.
+
+  Examples:
+  - `legacy/` is deprecated and being removed in Q4. Do not extend it.
+  - Migrations must be reversible; production runs them without downtime.
+  - `config/schema.json` is generated -- edit `src/schema.ts` and run `<cmd>`.
+  - Rate limiter uses Redis Lua scripts; changing them requires a cache flush.
+-->
+
+## Do not touch
+
+<!--
+  - Anything under `vendor/` or `generated/`
+  - `.env*`, `secrets/`, `*.pem` (also enforced by the secrets hook)
+  - Production config in `deploy/prod/`
+-->
+
+## Delegation
+
+When locating code in this repo, use the `scout` subagent rather than
+searching in the main conversation. Read files only after scout returns a
+specific path and line range.
+
+<!--
+  This paragraph is what makes model right-sizing actually happen. Without an
+  explicit instruction, the main model searches inline by default and the
+  scout agent goes unused.
+-->
