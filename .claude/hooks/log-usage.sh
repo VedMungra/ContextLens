@@ -43,8 +43,8 @@ echo "$INPUT" | jq -c \
      prompt_id:      (.prompt_id       // null),
      tool:           (.tool_name       // "unknown"),
      agent_type:     (.agent_type      // "main"),
-     response_bytes: ((.tool_response // "") | tostring | length),
-     input_bytes:    ((.tool_input    // "") | tostring | length),
+     response_bytes: ((.tool_response // "") | tostring | utf8bytelength),
+     input_bytes:    ((.tool_input    // "") | tostring | utf8bytelength),
      file:           (.tool_input.file_path // null
                        | if . == null then null else (. | split("/") | last) end)
    }' >> "$LOG_FILE" 2>/dev/null

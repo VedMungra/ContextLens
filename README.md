@@ -294,6 +294,21 @@ novelty effect, team composition, selection.
 
 ## Troubleshooting
 
+### Run the doctor first
+
+`report.py` can't tell "nobody has used Claude Code yet" from "the hooks
+broke two weeks ago" — an empty log directory looks the same either way.
+Before digging through the manual steps below, run:
+
+```bash
+bash scripts/doctor.sh
+```
+
+It prints PASS/FAIL for the usual causes — jq missing, hooks not executable,
+CRLF line endings, an invalid or wrong-platform `settings.json`, and a live
+end-to-end run of `log-usage.sh` — so you know which section below to read
+instead of checking all of them by hand.
+
 ### The log file is empty or doesn't exist
 
 Work through these in order — it's almost always one of the first three.
@@ -441,6 +456,7 @@ whoever needs to approve it.
   commands/                /scout, /review, /context
 
 scripts/report.py          Log aggregation, before/after report
+scripts/doctor.sh          PASS/FAIL checks for a broken install
 templates/                 CLAUDE.md template
 docs/
   INSTALL.md               Setup detail

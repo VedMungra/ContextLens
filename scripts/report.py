@@ -71,49 +71,76 @@ def event_date(ev):
 
 def summarise(events):
     """Collapse a list of events into the metrics we care about."""
-    sessions = defaultdict(lambda: {
-        "tool_calls": 0,
-        "response_bytes": 0,
-        "read_bytes": 0,
-        "reads": 0,
-        "delegated_calls": 0,
-        "tools": defaultdict(int),
-        "repo": None,
-        "first": None,
-        "last": None,
-    })
-
     session_starts = 0
+    session_events = defaultdict(list)
 
     for ev in events:
-        sid = ev.get("session", "unknown")
-        s = sessions[sid]
-        s["repo"] = s["repo"] or ev.get("repo")
-
-        ts = ev.get("ts")
-        if ts:
-            s["first"] = min(s["first"], ts) if s["first"] else ts
-            s["last"] = max(s["last"], ts) if s["last"] else ts
-
-        tool = ev.get("tool", "unknown")
-
-        if tool == SESSION_MARKER:
+        if ev.get("tool") == SESSION_MARKER:
             if ev.get("event") == "SessionStart":
                 session_starts += 1
             continue
+        session_events[ev.get("session", "unknown")].append(ev)
 
-        s["tool_calls"] += 1
-        s["tools"][tool] += 1
-        s["response_bytes"] += int(ev.get("response_bytes") or 0)
+    sessions = {}
+    for sid, evs in session_events.items():
+        s = {
+            "tool_calls": 0,
+            "response_bytes": 0,
+            "weighted_bytes": 0,
+            "read_bytes": 0,
+            "reads": 0,
+            "delegated_calls": 0,
+            "tools": defaultdict(int),
+            "repo": None,
+            "first": None,
+            "last": None,
+        }
 
-        if tool in ("Read", "Glob", "Grep"):
-            s["reads"] += 1
-            s["read_bytes"] += int(ev.get("response_bytes") or 0)
+        # Context is re-sent on every turn of a session, so bytes loaded on
+        # an early turn are billed again on every turn after it -- the raw
+        # byte total treats a turn-1 load and a last-turn load as equally
+        # costly, which understates the former. Recover a turn ordinal per
+        # call by grouping events by prompt_id in order of first appearance,
+        # then weight each call's bytes by how many turns were left
+        # (inclusive) when it entered the context window.
+        turn_order = []
+        seen_turns = set()
+        for ev in evs:
+            pid = ev.get("prompt_id")
+            if pid not in seen_turns:
+                seen_turns.add(pid)
+                turn_order.append(pid)
+        total_turns = len(turn_order)
+        turn_ordinal = {pid: i + 1 for i, pid in enumerate(turn_order)}
 
-        # Any call whose agent_type is not "main" happened inside a subagent,
-        # i.e. its context cost was paid in an isolated window.
-        if ev.get("agent_type", "main") != "main":
-            s["delegated_calls"] += 1
+        for ev in evs:
+            s["repo"] = s["repo"] or ev.get("repo")
+
+            ts = ev.get("ts")
+            if ts:
+                s["first"] = min(s["first"], ts) if s["first"] else ts
+                s["last"] = max(s["last"], ts) if s["last"] else ts
+
+            tool = ev.get("tool", "unknown")
+            resp_bytes = int(ev.get("response_bytes") or 0)
+
+            s["tool_calls"] += 1
+            s["tools"][tool] += 1
+            s["response_bytes"] += resp_bytes
+
+            ordinal = turn_ordinal.get(ev.get("prompt_id"), total_turns)
+            s["weighted_bytes"] += resp_bytes * (total_turns - ordinal + 1)
+
+            if tool in ("Read", "Glob", "Grep"):
+                s["reads"] += 1
+                s["read_bytes"] += resp_bytes
+
+            # Any call whose agent_type is not "main" happened inside a
+            # subagent, i.e. its context cost was paid in an isolated window.
+            if ev.get("agent_type", "main") != "main":
+                s["delegated_calls"] += 1
+
+        sessions[sid] = s
 
     # Drop sessions with no real tool calls (session markers only).
     real = {k: v for k, v in sessions.items() if v["tool_calls"] > 0}
@@ -121,10 +148,12 @@ def summarise(events):
         return None
 
     per_session_bytes = [v["response_bytes"] for v in real.values()]
+    per_session_weighted_bytes = [v["weighted_bytes"] for v in real.values()]
     per_session_calls = [v["tool_calls"] for v in real.values()]
 
     total_calls = sum(per_session_calls)
     total_bytes = sum(per_session_bytes)
+    total_weighted_bytes = sum(per_session_weighted_bytes)
     delegated = sum(v["delegated_calls"] for v in real.values())
 
     tool_totals = defaultdict(int)
@@ -141,10 +170,14 @@ def summarise(events):
         "session_starts": session_starts,
         "total_tool_calls": total_calls,
         "total_response_bytes": total_bytes,
+        "total_weighted_bytes": total_weighted_bytes,
         "median_bytes_per_session": int(statistics.median(per_session_bytes)),
         "mean_bytes_per_session": int(statistics.mean(per_session_bytes)),
+        "median_weighted_bytes_per_session": int(statistics.median(per_session_weighted_bytes)),
+        "mean_weighted_bytes_per_session": int(statistics.mean(per_session_weighted_bytes)),
         "median_calls_per_session": int(statistics.median(per_session_calls)),
         "bytes_per_tool_call": int(total_bytes / total_calls) if total_calls else 0,
+        "weighted_bytes_per_tool_call": int(total_weighted_bytes / total_calls) if total_calls else 0,
         "delegation_share": (delegated / total_calls) if total_calls else 0.0,
         "repos": sorted({v["repo"] for v in real.values() if v["repo"]}),
         "top_tools": sorted(tool_totals.items(), key=lambda x: -x[1])[:8],
@@ -171,11 +204,17 @@ def print_block(title, s):
     print(f"  Repos                    {', '.join(s['repos']) or 'n/a'}")
     print(f"  Total tool calls         {s['total_tool_calls']:,}")
     print(f"  Total context volume     {human_bytes(s['total_response_bytes'])}")
+    print(f"  Total turn-weighted vol. {human_bytes(s['total_weighted_bytes'])}")
     print()
     print(f"  Median per session       {human_bytes(s['median_bytes_per_session'])}"
           f"  ({s['median_calls_per_session']} tool calls)")
     print(f"  Mean per session         {human_bytes(s['mean_bytes_per_session'])}")
     print(f"  Per tool call            {human_bytes(s['bytes_per_tool_call'])}")
+    print()
+    print(f"  Median weighted/session  {human_bytes(s['median_weighted_bytes_per_session'])}")
+    print(f"  Mean weighted/session    {human_bytes(s['mean_weighted_bytes_per_session'])}")
+    print(f"  Weighted per tool call   {human_bytes(s['weighted_bytes_per_tool_call'])}")
+    print()
     print(f"  Delegated to subagents   {s['delegation_share'] * 100:.1f}% of calls")
     print()
     print("  Most-used tools:")
@@ -195,6 +234,9 @@ def print_delta(before, after):
         ("Median context per session", "median_bytes_per_session", human_bytes, True),
         ("Mean context per session", "mean_bytes_per_session", human_bytes, True),
         ("Context per tool call", "bytes_per_tool_call", human_bytes, True),
+        ("Median turn-weighted vol/session", "median_weighted_bytes_per_session", human_bytes, True),
+        ("Mean turn-weighted vol/session", "mean_weighted_bytes_per_session", human_bytes, True),
+        ("Turn-weighted vol per tool call", "weighted_bytes_per_tool_call", human_bytes, True),
         ("Median tool calls / session", "median_calls_per_session", str, True),
     ]
 

@@ -21,6 +21,8 @@ Every tool call appends one line to a daily JSONL log:
 `report.py` aggregates these into:
 
 - **Median context volume per session** — the headline metric
+- **Median turn-weighted volume per session** — a second headline metric, see
+  below
 - **Context volume per tool call** — catches "fewer, bigger reads"
 - **Median tool calls per session**
 - **Delegation share** — percentage of calls made inside subagents
@@ -34,11 +36,42 @@ by content: minified JSON, dense code, and prose tokenize differently.
 
 It is **not a bill.** It ignores cached prefix reuse, output tokens, and the
 fact that context is re-sent on every request within a session — which means
-it likely *understates* the real effect of trimming context.
+the raw byte total *understates* the real effect of trimming context. See
+"Turn-weighted volume" below for the metric that corrects for this.
 
 It is **a proxy for context volume**, and context volume is the thing our
 changes actually move. That makes it the right instrument for "did this work",
 and the wrong instrument for "what did we save in rupees".
+
+### Turn-weighted volume
+
+`response_bytes` treats a 100 KB tool result loaded on turn 1 of a 21-turn
+session the same as an identical 100 KB result loaded on the last turn. That's
+wrong: Claude Code resends the full conversation context on every turn, so
+the turn-1 load is re-billed 21 times over and the last-turn load is billed
+once. **Raw context volume understates the cost of early loads** — sometimes
+by an order of magnitude — and it makes early-session context hygiene look
+less valuable than it is.
+
+`report.py` corrects for this with a second headline metric,
+`weighted_bytes`. For each session it:
+
+1. Groups that session's tool-call events by `prompt_id`, in order of first
+   appearance, to assign each call a turn ordinal (1 = first turn).
+2. Computes, per call: `weighted_bytes = response_bytes * (total_turns -
+   turn_ordinal + 1)` — i.e. the number of turns (including the current one)
+   that the load's bytes were still sitting in context and being re-sent.
+3. Sums across the session.
+
+A call on turn 1 of a 21-turn session is weighted ×21. The same call on turn
+21 is weighted ×1. This is still a proxy — it assumes every turn resends the
+full prior context, which is directionally true but ignores compaction and
+prompt caching — but it is a much closer approximation of what an early,
+avoidable load actually costs than the raw byte count is.
+
+Both metrics are reported side by side, and both appear in the before/after
+delta table. Keep using raw volume for "how much stuff came back"; use
+turn-weighted volume for "how much did loading it early actually cost".
 
 ### When you need real numbers
 

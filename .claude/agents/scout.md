@@ -1,7 +1,7 @@
 ---
 name: scout
 description: Use this agent PROACTIVELY whenever a question requires locating code before reasoning about it -- "where is X handled", "which files touch Y", "find every caller of Z", "how is W wired up". Returns a compact map of relevant files and line ranges instead of pulling file contents into the main conversation. Use it before any refactor, bug hunt, or unfamiliar-area task.
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob
 model: haiku
 ---
 
