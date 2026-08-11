@@ -7,7 +7,7 @@ gets pulled into the context window — and re-sent on every single turn after
 that. Most people optimise this by feel. ContextLens measures it first, then
 gives you three levers to act on what you find.
 
-Install: about 5 minutes.
+Install: about 5 minutes, full walkthrough in [docs/INSTALL.md](docs/INSTALL.md).
 
 ---
 
@@ -17,10 +17,8 @@ Install: about 5 minutes.
 >
 > The whole point is a before/after comparison. If you install the agents and
 > commands on day one, there is no "before" — and you cannot go back and
-> collect it later.
->
-> The install steps below hold back the right pieces automatically. Don't skip
-> Step 5.
+> collect it later. [docs/INSTALL.md](docs/INSTALL.md) holds back the right
+> pieces automatically — don't skip that step.
 
 ---
 
@@ -34,209 +32,55 @@ a before/after number.
 context. A `/context` command tells you what to drop mid-session. A `CLAUDE.md`
 template stops Claude guessing at your build commands.
 
-**A guardrail** — an optional hook blocks reads and writes to `.env`, `*.pem`,
-credentials, and similar.
+**A guardrail** — an optional hook blocks reads, writes, greps, and shell
+access to `.env`, `*.pem`, credentials, and similar.
 
 **No source code, no prompts, and no file contents are ever logged.** Nothing
 leaves your machine. See [Privacy](#privacy).
 
 ---
 
-## Step 1 — Check what you have
+## Quickstart
 
-Run these three. Every one needs to work before you continue.
-
-```bash
-claude --version    # Claude Code
-jq --version        # JSON processor — hooks silently do nothing without it
-git --version       # Git
-```
-
-### Installing what's missing
-
-**Claude Code** (needs Node.js 18+):
-
-```bash
-node --version    # if missing, install Node first
-npm install -g @anthropic-ai/claude-code
-```
-
-**jq:**
-
-| OS | Command |
-|---|---|
-| macOS | `brew install jq` |
-| Ubuntu / Debian | `sudo apt-get install -y jq` |
-| Windows | `winget install jqlang.jq` (in PowerShell) |
-
-### 🪟 Windows: use Git Bash
-
-The hooks are shell scripts. **They will not run in PowerShell or CMD.**
-
-```
-winget install Git.Git
-```
-
-Then open **Git Bash** from the Start menu and run everything below there.
-
-Two things look different in Git Bash: `D:\my-repo` is written `/d/my-repo`,
-and paths with spaces need quotes — `cd "/d/My Project"`.
-
-After installing anything with `winget`, **close and reopen Git Bash** so the
-PATH refreshes.
-
----
-
-## Step 2 — Clone ContextLens
+🪟 **On Windows**, hooks need Git Bash, and `.claude/settings.json` needs
+swapping for the Windows variant *before* you run the block below — see
+[docs/INSTALL.md](docs/INSTALL.md), or `doctor.sh` will just tell you it's
+broken without saying why.
 
 ```bash
 git clone https://github.com/VedMungra/ContextLens.git /tmp/contextlens
-```
-
-This is a temporary copy you install *from*. It is not where you work.
-
----
-
-## Step 3 — Go to your own repo
-
-```bash
-cd /path/to/your/repo        # Windows: cd "/d/Your Project"
-git status                   # confirm you're in the right place
-git checkout -b contextlens  # work on a branch, not main
-```
-
-**Which repo?** One you'll actively code in for the next month. A finished
-project generates no sessions, so there'd be nothing to measure.
-
----
-
-## Step 4 — Copy the files in
-
-```bash
-cp -r /tmp/contextlens/.claude .
-cp -r /tmp/contextlens/scripts .
+cd /path/to/your/repo && git checkout -b contextlens
+cp -r /tmp/contextlens/.claude /tmp/contextlens/scripts .
 mkdir -p docs && cp -r /tmp/contextlens/docs/* docs/
 chmod +x .claude/hooks/*.sh
-```
 
-### 🪟 Windows: two extra commands
-
-The default config uses a form that requires a real executable, and `.sh` files
-aren't executables on Windows — so the hooks would silently never fire. Swap in
-the Windows config:
-
-```bash
-cp .claude/settings-windows.json .claude/settings.json
-grep -c '"shell": "bash"' .claude/settings.json
-```
-
-**That must print `4`.** If it prints `0`, the swap didn't work — stop and fix
-it, or nothing below will function.
-
-Then protect the line endings, or Bash will choke on `\r`:
-
-```bash
-printf '*.sh text eol=lf\n' >> .gitattributes
-file .claude/hooks/*.sh      # must NOT mention "CRLF"
-```
-
-If it does mention CRLF:
-
-```bash
-sed -i 's/\r$//' .claude/hooks/*.sh
-```
-
----
-
-## Step 5 — Hold back the agents and commands ⚠️
-
-**Do not skip this.** It's what makes your final number mean anything.
-
-```bash
+# hold back the pieces that would contaminate your baseline
 mkdir -p /tmp/contextlens-hold
 mv .claude/agents .claude/commands /tmp/contextlens-hold/
-```
 
-You'll move them back in two weeks. `/tmp` gets cleared on reboot on some
-systems — if that worries you, use a folder in your home directory instead.
+bash scripts/doctor.sh   # confirms the install actually works
 
----
-
-## Step 6 — Verify it works
-
-Start Claude Code in your repo:
-
-```bash
-claude
-```
-
-Type `/hooks`. You should see **PreToolUse**, **PostToolUse**, **SessionStart**,
-and **SessionEnd** with counts next to them. (The menu lists every possible
-event — only the ones showing a count are yours.)
-
-Now ask Claude something that makes it touch a file:
-
-```
-what files are in this project?
-```
-
-Exit with `/exit`, then check the log:
-
-```bash
-cat ~/.claude/usage-logs/$(date -u +%Y-%m-%d).jsonl
-```
-
-You want lines like this:
-
-```json
-{"ts":"2026-08-11T09:15:22Z","repo":"my-project","session":"dbb5a2de-...",
- "tool":"Read","agent_type":"main","response_bytes":6475,"file":"index.js"}
-```
-
-**Empty or missing?** → [Troubleshooting](#troubleshooting).
-
----
-
-## Step 7 — Commit, and write down the date
-
-```bash
-git add .claude scripts docs .gitattributes
+git add .claude scripts docs
 git commit -m "Add ContextLens instrumentation"
+# 📅 write down today's date -- you need it in two weeks for report.py --before
 ```
 
-📅 **Write down today's date.** You need it in two weeks for
-`report.py --before <date>`. You will not remember it otherwise.
+Full command-by-command walkthrough, verification steps, and the reasoning
+behind each one: **[docs/INSTALL.md](docs/INSTALL.md)**.
 
 ---
 
-## Then: use Claude Code normally for two weeks
+## The two-week cycle
 
-Change nothing. Don't optimise, don't add `CLAUDE.md`, don't restore the
-agents. You're collecting the "before" picture, and self-consciously
-optimising during it defeats the purpose.
-
-Check progress any time:
-
-```bash
-python3 scripts/report.py
-```
-
----
-
-## After two weeks — turn everything on
+Use Claude Code normally for two weeks with just the hooks installed — no
+`CLAUDE.md`, agents still held back, no self-conscious optimising. Then:
 
 ```bash
 mv /tmp/contextlens-hold/agents /tmp/contextlens-hold/commands .claude/
-cp /tmp/contextlens/templates/CLAUDE.md.template ./CLAUDE.md
+cp /tmp/contextlens/templates/CLAUDE.md.template ./CLAUDE.md   # fill in, keep under ~150 lines
 ```
 
-Now fill in `CLAUDE.md` for your repo: build and test commands, architecture in
-ten lines, conventions that aren't obvious from the code, things not to touch.
-
-**Keep it under ~150 lines.** It loads on every session, and it sits in the
-cached prefix — so frequent edits also cost you prompt-cache hits.
-
-Restart Claude Code. Three commands are now available:
+Three commands become available:
 
 | Command | What it does |
 |---|---|
@@ -244,7 +88,7 @@ Restart Claude Code. Three commands are now available:
 | `/review` | Read-only review of your current diff, checked against your `CLAUDE.md` |
 | `/context` | Audits what's loaded in this session and tells you what to drop |
 
-Use them for another two weeks.
+Use them for another two weeks, then get your number.
 
 ---
 
@@ -252,10 +96,9 @@ Use them for another two weeks.
 
 ```bash
 python3 scripts/report.py --before 2026-08-25    # your split date
-python3 scripts/report.py --before 2026-08-25 --json > results.json
+mkdir -p results
+python3 scripts/report.py --before 2026-08-25 --json > results/2026-08-25.json
 ```
-
-Sample output:
 
 ```
 BEFORE vs AFTER
@@ -266,39 +109,24 @@ BEFORE vs AFTER
   Sample sizes: 84 sessions before, 84 after.
 ```
 
-**Keep `results.json`.** Commit it with the split date. In three months you
-won't remember how you measured this, and that file is the difference between a
-number you can explain and one you can't.
-
-### What the number actually means
-
-The metric is **context volume**: bytes of tool output entering the context
-window.
-
-It is **not a token count** and **not a bill.** Bytes and tokens correlate
-imperfectly, and this ignores cached prefix reuse and output tokens. It is a
-solid proxy for judging whether a change helped, and the wrong instrument for
-telling finance what you saved.
-
-For real token and cost figures, Claude Code supports OpenTelemetry export.
-That runs alongside this without conflict. ContextLens exists because it
-installs in five minutes and needs no collector.
+`response_bytes` is a **proxy for context volume — not a token count and not a
+bill.** [docs/MEASUREMENT.md](docs/MEASUREMENT.md) covers what it does and
+doesn't support, the turn-weighted metric that corrects for early-session
+loads being re-sent on every turn, and the confounders worth disclosing (task
+mix, novelty effect, team composition, selection).
 
 **Below ~20 sessions per side, don't quote a percentage** — session variance
-swamps the effect. The report warns you when you're under.
+swamps the effect, and the report warns you when you're under.
 
-`docs/MEASUREMENT.md` covers the confounders worth disclosing: task mix,
-novelty effect, team composition, selection.
+**Keep `results/*.json`, committed with the split date.** In three months you
+won't remember how you measured this, and that file is the difference between
+a number you can explain and one you can't.
 
 ---
 
 ## Troubleshooting
 
-### Run the doctor first
-
-`report.py` can't tell "nobody has used Claude Code yet" from "the hooks
-broke two weeks ago" — an empty log directory looks the same either way.
-Before digging through the manual steps below, run:
+Run the doctor first:
 
 ```bash
 bash scripts/doctor.sh
@@ -306,109 +134,9 @@ bash scripts/doctor.sh
 
 It prints PASS/FAIL for the usual causes — jq missing, hooks not executable,
 CRLF line endings, an invalid or wrong-platform `settings.json`, and a live
-end-to-end run of `log-usage.sh` — so you know which section below to read
-instead of checking all of them by hand.
-
-### The log file is empty or doesn't exist
-
-Work through these in order — it's almost always one of the first three.
-
-**1. jq isn't installed**
-
-```bash
-jq --version
-```
-
-The hooks fail silently by design (a broken measurement tool must never block
-your work), so a missing `jq` looks exactly like nothing happening.
-
-**2. Hooks aren't executable**
-
-```bash
-ls -l .claude/hooks/
-```
-
-You want `-rwxr-xr-x`. If you see `-rw-r--r--`:
-
-```bash
-chmod +x .claude/hooks/*.sh
-```
-
-**3. 🪟 Wrong settings file on Windows**
-
-```bash
-grep -c '"shell": "bash"' .claude/settings.json
-```
-
-Must print `4`. If it prints `0`:
-
-```bash
-cp .claude/settings-windows.json .claude/settings.json
-```
-
-**4. 🪟 Windows line endings**
-
-```bash
-file .claude/hooks/*.sh
-```
-
-If any say "CRLF":
-
-```bash
-sed -i 's/\r$//' .claude/hooks/*.sh
-```
-
-**5. Started Claude Code from the wrong directory**
-
-Hooks resolve paths via `${CLAUDE_PROJECT_DIR}`. Launch `claude` from your repo
-root.
-
-**6. Still nothing — get the actual error**
-
-```bash
-claude --debug-file /tmp/cc.log
-# reproduce the problem, exit, then:
-grep -i hook /tmp/cc.log
-```
-
-### Test a hook directly
-
-Bypasses Claude Code entirely, so you learn whether the script itself works:
-
-```bash
-export CLAUDE_USAGE_LOG_DIR=/tmp/hooktest
-printf '%s' '{"session_id":"t1","hook_event_name":"PostToolUse","tool_name":"Read","tool_input":{"file_path":"/x/a.py"},"tool_response":"hello"}' | bash .claude/hooks/log-usage.sh
-cat /tmp/hooktest/*.jsonl
-```
-
-A JSON line with `"response_bytes":5` means the script is fine and the problem
-is in the wiring. Nothing means it's `jq` or line endings.
-
-### `/hooks` shows nothing configured
-
-- Restart Claude Code — config loads at session start
-- Confirm `.claude/settings.json` exists at your repo root
-- Validate the JSON: `python3 -c "import json;json.load(open('.claude/settings.json'))"`
-
-### `/scout` or `/review` aren't offered
-
-- They're held back during your baseline — that's Step 5 working as intended
-- After restoring them, restart Claude Code
-- Confirm `.claude/agents/` and `.claude/commands/` are at the repo root
-
-### The secrets guard is blocking a file I need
-
-Edit `BLOCKED_PATTERNS` in `.claude/hooks/guard-secrets.sh`, or remove the
-`PreToolUse` block from `.claude/settings.json` entirely.
-
-### `python3: command not found`
-
-Try `python` instead. On Windows, `python3` often isn't aliased.
-
-### `bash: syntax error near unexpected token`
-
-You pasted terminal output (including the `$` prompt) back into the terminal.
-Copy only the commands, and run them one line at a time.
+end-to-end run of `log-usage.sh`. For the full manual checklist — empty log
+file, `/scout` not offered, the secrets guard blocking something legitimate,
+and more — see **[docs/INSTALL.md § Troubleshooting](docs/INSTALL.md#troubleshooting)**.
 
 ---
 
@@ -422,21 +150,12 @@ never the full path).
 full paths, shell command text, environment variables, credentials.
 
 Everything stays in `~/.claude/usage-logs/` on your machine. There is no server
-and nothing is transmitted anywhere.
+and nothing is transmitted anywhere. **To opt out:** delete the `PostToolUse`
+block from `.claude/settings.json` — everything else keeps working.
 
-A complete log line, in full:
-
-```json
-{"ts":"2026-08-11T09:15:22Z","repo":"my-project","session":"abc123",
- "prompt_id":"p-1","tool":"Read","agent_type":"main",
- "response_bytes":6475,"input_bytes":188,"file":"login.js"}
-```
-
-**To opt out:** delete the `PostToolUse` block from `.claude/settings.json`.
-Everything else keeps working.
-
-Rolling this out to a team? `docs/PRIVACY.md` is written to be forwarded to
-whoever needs to approve it.
+Rolling this out to a team? [docs/PRIVACY.md](docs/PRIVACY.md) is written to be
+forwarded to whoever needs to approve it, and includes a complete sample log
+line.
 
 ---
 
@@ -459,8 +178,8 @@ scripts/report.py          Log aggregation, before/after report
 scripts/doctor.sh          PASS/FAIL checks for a broken install
 templates/                 CLAUDE.md template
 docs/
-  INSTALL.md               Setup detail
-  MEASUREMENT.md           Methodology and confounders
+  INSTALL.md               Full setup walkthrough + troubleshooting
+  MEASUREMENT.md           Methodology, turn-weighted metric, confounders
   PRIVACY.md               Forward this for approval
   ROLLOUT.md               Four-week team plan
 ```
@@ -469,7 +188,8 @@ docs/
 
 ## Rolling out to a team
 
-`docs/ROLLOUT.md` has a four-week plan with decision points. The short version:
+[docs/ROLLOUT.md](docs/ROLLOUT.md) has a four-week plan with decision points.
+The short version:
 
 1. **Get privacy approval first.** Forward `docs/PRIVACY.md`. Doing this in
    week 3 instead of week 0 is how these projects die.
@@ -487,7 +207,8 @@ going to run on everyone's machine, and the merge is your record of adoption.
 
 Hook scripts and `report.py` are tested against representative payloads: normal
 tool calls, subagent calls, nested-object responses, missing fields, and
-malformed input. Hooks fail silently by design.
+non-ASCII or malformed input. The secrets guard fails closed; logging fails
+silent by design, so a broken measurement tool never blocks your work.
 
 Verified end to end on Windows with Git Bash, including a fresh-clone install.
 Not yet exercised at team scale — issues and corrections welcome.

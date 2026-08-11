@@ -40,7 +40,7 @@ echo
 if command -v jq >/dev/null 2>&1; then
   pass "jq installed ($(jq --version 2>/dev/null))"
 else
-  fail "jq installed" "Hooks lose most of their logic without jq. Install: see README Step 1."
+  fail "jq installed" "Hooks lose most of their logic without jq. Install: see docs/INSTALL.md § Prerequisites."
 fi
 
 # ---------------------------------------------------------------------------
