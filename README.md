@@ -47,7 +47,7 @@ jq --version
 ## Install
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/contextlens.git /tmp/contextlens
+git clone https://github.com/VedMungra/ContextLens.git /tmp/contextlens
 cd /path/to/your/repo
 
 cp -r /tmp/contextlens/.claude .
